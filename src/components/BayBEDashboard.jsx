@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import _ from 'lodash';
 
-// Sample optimization data structure
+// Enhanced sample data generation function
 const createSampleData = (iterations = 35) => {
   // Parameters
   const params = [
@@ -32,120 +32,109 @@ const createSampleData = (iterations = 35) => {
   };
   
   const data = [];
-  let bestYield = 0.2;
-  let bestYieldIdx = 0;
-  let lowestImpurity = 0.3;
-  let lowestImpurityIdx = 0;
-  let bestImpurityRatio = 1.1;
-  let bestImpurityRatioIdx = 0;
   
+  // Set initial values with some realistic trends
+  let currentYield = 0.5; // Starting at 50%
+  let currentImpurity = 0.2; // Starting at 20%
+  let currentImpurityRatio = 1.2;
+  
+  // Add some realistic correlations
+  const correlations = {
+    "T1Celsius": { yield: 0.6, impurity: 0.3, ratio: -0.2 },
+    "t1min": { yield: 0.3, impurity: -0.4, ratio: 0.5 },
+    "T2Celsius": { yield: -0.2, impurity: 0.7, ratio: 0.3 },
+    "t2min": { yield: 0.4, impurity: 0.1, ratio: -0.1 },
+    "EquivalentsReagent1": { yield: 0.8, impurity: -0.6, ratio: 0.7 },
+    "EquivalentsBASE1": { yield: 0.5, impurity: -0.3, ratio: 0.4 },
+    "ConcentrationMolar": { yield: 0.1, impurity: 0.1, ratio: 0.1 }
+  };
+  
+  // Generate data with trends and noise
   for (let i = 0; i < iterations; i++) {
-    const entry = {
-      iteration: i + 1,
-      Yield: bestYield + (Math.random() * 0.1 - 0.02),
-      Impurity: lowestImpurity * (0.95 + Math.random() * 0.1),
-      ImpurityXRatio: bestImpurityRatio * (0.98 + Math.random() * 0.08)
-    };
+    // Generate parameter values
+    const paramValues = {};
     
-    // Make metrics tend to improve over time with occasional jumps
-    if (entry.Yield > bestYield) {
-      bestYield = entry.Yield;
-      bestYieldIdx = i;
-    }
-    
-    if (entry.Impurity < lowestImpurity) {
-      lowestImpurity = entry.Impurity;
-      lowestImpurityIdx = i;
-    }
-    
-    if (entry.ImpurityXRatio > bestImpurityRatio) {
-      bestImpurityRatio = entry.ImpurityXRatio;
-      bestImpurityRatioIdx = i;
-    }
-    
-    // Add random parameter settings
     params.forEach(param => {
       const [min, max] = ranges[param];
-      entry[param] = min + Math.random() * (max - min);
+      
+      // For the first few iterations, explore parameter space randomly
+      if (i < 10) {
+        paramValues[param] = min + Math.random() * (max - min);
+      } else {
+        // For later iterations, bias toward better parameter regions
+        // based on correlations with yield
+        const correlation = correlations[param].yield;
+        const bias = correlation > 0 ? 0.7 : 0.3; // Bias toward higher values for positive correlations
+        
+        // Add some randomness to avoid getting stuck
+        const randomFactor = Math.random() * 0.6 + 0.2; // Between 0.2 and 0.8
+        const weightedRandom = randomFactor * bias + (1 - randomFactor) * (1 - bias);
+        
+        paramValues[param] = min + weightedRandom * (max - min);
+      }
     });
+    
+    // Calculate metrics based on parameters with some noise
+    let yieldValue = 0.5; // Base value
+    let impurityValue = 0.2; // Base value
+    let impurityRatioValue = 1.2; // Base value
+    
+    // Apply parameter influences
+    params.forEach(param => {
+      const normalizedValue = (paramValues[param] - ranges[param][0]) / (ranges[param][1] - ranges[param][0]);
+      
+      // Apply correlations with some non-linearity
+      yieldValue += correlations[param].yield * normalizedValue * 0.1;
+      impurityValue += correlations[param].impurity * normalizedValue * 0.05;
+      impurityRatioValue += correlations[param].ratio * normalizedValue * 0.2;
+    });
+    
+    // Add some noise
+    yieldValue += (Math.random() * 0.1 - 0.05);
+    impurityValue += (Math.random() * 0.05 - 0.025);
+    impurityRatioValue += (Math.random() * 0.2 - 0.1);
+    
+    // Apply optimization trend - improvement over iterations
+    const optimizationFactor = Math.min(0.4, i / iterations * 0.4);
+    yieldValue += optimizationFactor;
+    impurityValue -= optimizationFactor * 0.5;
+    impurityRatioValue += optimizationFactor * 0.3;
+    
+    // Ensure values are in reasonable ranges
+    yieldValue = Math.max(0.1, Math.min(1.0, yieldValue));
+    impurityValue = Math.max(0.001, Math.min(0.5, impurityValue));
+    impurityRatioValue = Math.max(1.0, Math.min(3.0, impurityRatioValue));
+    
+    // Create data point
+    const entry = {
+      iteration: i + 1,
+      Yield: yieldValue,
+      Impurity: impurityValue,
+      ImpurityXRatio: impurityRatioValue,
+      ...paramValues
+    };
     
     data.push(entry);
   }
   
-  // Ensure the best metrics happen at different iterations for realism
-  if (bestYieldIdx === lowestImpurityIdx) {
-    data[lowestImpurityIdx + 1].Impurity = lowestImpurity * 0.9;
+  // Add a few breakthrough points
+  if (iterations >= 15) {
+    // Breakthrough in yield around iteration 15
+    const yieldBreakthrough = Math.floor(iterations * 0.4);
+    data[yieldBreakthrough].Yield = 0.92;
+    
+    // Breakthrough in impurity reduction around iteration 25
+    const impurityBreakthrough = Math.floor(iterations * 0.7);
+    data[impurityBreakthrough].Impurity = 0.01;
   }
   
   return data;
 };
 
-// Get a sample of data from optimization.csv
-const fetchOptimizationData = async () => {
-  try {
-    let data;
-    
-    // First attempt: Try using window.fs if available
-    if (window.fs && typeof window.fs.readFile === 'function') {
-      try {
-        console.log("Attempting to read file with window.fs...");
-        const response = await window.fs.readFile('optimization.csv', { encoding: 'utf8' });
-        console.log("Successfully read file:", response.slice(0, 100) + "...");
-        
-        // Parse the CSV data
-        data = parseCSVData(response);
-        console.log('Successfully parsed CSV data from window.fs:', data.length, 'rows');
-        return data;
-      } catch (fsError) {
-        console.warn('Error reading file with window.fs:', fsError);
-        // Continue to next method if this fails
-      }
-    }
-    
-    // Second attempt: Try using fetch API
-    try {
-      console.log("Attempting to fetch optimization.csv via fetch API...");
-      const response = await fetch('/optimization.csv');
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-      const text = await response.text();
-      data = parseCSVData(text);
-      console.log('Successfully loaded optimization.csv via fetch:', data.length, 'rows');
-      return data;
-    } catch (fetchError) {
-      console.warn('Error fetching CSV file:', fetchError);
-    }
-    
-    // Fallback: Return sample data if both methods fail
-    console.warn('Using sample data as fallback');
-    return createSampleData();
-  } catch (error) {
-    console.error('Critical error in fetchOptimizationData:', error);
-    // Make sure we always return something to prevent rendering errors
-    return createSampleData();
-  }
+// Use directly created dummy data instead of loading CSV
+const getDummyData = () => {
+  return createSampleData(35);
 };
-
-// Separate parsing logic to improve maintainability
-const parseCSVData = (csvText) => {
-  const lines = csvText.trim().split('\n');
-  const headers = lines[0].split(',');
-  
-  return lines.slice(1).map((line, index) => {
-    const values = line.split(',');
-    const entry = { iteration: index + 1 };
-    
-    headers.forEach((header, i) => {
-      if (i < values.length) {
-        entry[header] = parseFloat(values[i]);
-      }
-    });
-    
-    return entry;
-  });
-};
-
 
 const findCorrelations = (data, targets) => {
   const params = ["T1Celsius", "t1min", "T2Celsius", "t2min", 
@@ -337,37 +326,34 @@ const BayBEDashboard = () => {
   const [showStabilityRegions, setShowStabilityRegions] = useState(true);
   
   useEffect(() => {
-    const loadData = async () => {
-      const optimizationData = await fetchOptimizationData();
-      setData(optimizationData);
-      
-      if (optimizationData.length > 0) {
-        setCurrentIteration(optimizationData.length);
-        
-        // Calculate correlations
-        const targetNames = ['Yield', 'Impurity', 'ImpurityXRatio'];
-        const corrs = findCorrelations(optimizationData, targetNames);
-        setCorrelations(corrs);
-        
-        // Find best values
-        const yieldMax = Math.max(...optimizationData.map(d => d.Yield));
-        const yieldMaxIter = optimizationData.findIndex(d => d.Yield === yieldMax) + 1;
-        
-        const impurityMin = Math.min(...optimizationData.map(d => d.Impurity));
-        const impurityMinIter = optimizationData.findIndex(d => d.Impurity === impurityMin) + 1;
-        
-        const ratioMax = Math.max(...optimizationData.map(d => d.ImpurityXRatio));
-        const ratioMaxIter = optimizationData.findIndex(d => d.ImpurityXRatio === ratioMax) + 1;
-        
-        setBestValues({
-          Yield: { value: yieldMax, iteration: yieldMaxIter },
-          Impurity: { value: impurityMin, iteration: impurityMinIter },
-          ImpurityXRatio: { value: ratioMax, iteration: ratioMaxIter }
-        });
-      }
-    };
+    // Load dummy data instead of CSV
+    const dummyData = getDummyData();
+    setData(dummyData);
     
-    loadData();
+    if (dummyData.length > 0) {
+      setCurrentIteration(dummyData.length);
+      
+      // Calculate correlations
+      const targetNames = ['Yield', 'Impurity', 'ImpurityXRatio'];
+      const corrs = findCorrelations(dummyData, targetNames);
+      setCorrelations(corrs);
+      
+      // Find best values
+      const yieldMax = Math.max(...dummyData.map(d => d.Yield));
+      const yieldMaxIter = dummyData.findIndex(d => d.Yield === yieldMax) + 1;
+      
+      const impurityMin = Math.min(...dummyData.map(d => d.Impurity));
+      const impurityMinIter = dummyData.findIndex(d => d.Impurity === impurityMin) + 1;
+      
+      const ratioMax = Math.max(...dummyData.map(d => d.ImpurityXRatio));
+      const ratioMaxIter = dummyData.findIndex(d => d.ImpurityXRatio === ratioMax) + 1;
+      
+      setBestValues({
+        Yield: { value: yieldMax, iteration: yieldMaxIter },
+        Impurity: { value: impurityMin, iteration: impurityMinIter },
+        ImpurityXRatio: { value: ratioMax, iteration: ratioMaxIter }
+      });
+    }
   }, []);
   
   const filteredData = data.slice(0, currentIteration);
@@ -427,60 +413,32 @@ const BayBEDashboard = () => {
     );
   }, [filteredData, selectedTarget, paramRanges, sensitivityThreshold, stabilityThreshold]);
   
-  // Function to handle file upload
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const text = e.target.result;
-          const lines = text.trim().split('\n');
-          const headers = lines[0].split(',');
-          
-          const parsedData = lines.slice(1).map((line, index) => {
-            const values = line.split(',');
-            const entry = { iteration: index + 1 };
-            
-            headers.forEach((header, i) => {
-              entry[header] = parseFloat(values[i]);
-            });
-            
-            return entry;
-          });
-          
-          setData(parsedData);
-          setCurrentIteration(parsedData.length);
-          
-          // Calculate correlations
-          const targetNames = ['Yield', 'Impurity', 'ImpurityXRatio'];
-          const corrs = findCorrelations(parsedData, targetNames);
-          setCorrelations(corrs);
-          
-          // Find best values
-          const yieldMax = Math.max(...parsedData.map(d => d.Yield));
-          const yieldMaxIter = parsedData.findIndex(d => d.Yield === yieldMax) + 1;
-          
-          const impurityMin = Math.min(...parsedData.map(d => d.Impurity));
-          const impurityMinIter = parsedData.findIndex(d => d.Impurity === impurityMin) + 1;
-          
-          const ratioMax = Math.max(...parsedData.map(d => d.ImpurityXRatio));
-          const ratioMaxIter = parsedData.findIndex(d => d.ImpurityXRatio === ratioMax) + 1;
-          
-          setBestValues({
-            Yield: { value: yieldMax, iteration: yieldMaxIter },
-            Impurity: { value: impurityMin, iteration: impurityMinIter },
-            ImpurityXRatio: { value: ratioMax, iteration: ratioMaxIter }
-          });
-          
-          alert(`Successfully loaded ${parsedData.length} data points from the CSV file`);
-        } catch (error) {
-          console.error("Error parsing CSV file:", error);
-          alert("Error parsing CSV file. Please make sure it's in the correct format.");
-        }
-      };
-      reader.readAsText(file);
-    }
+  // Function to generate new dummy data
+  const handleRegenerateData = () => {
+    const newData = getDummyData();
+    setData(newData);
+    setCurrentIteration(newData.length);
+    
+    // Calculate correlations
+    const targetNames = ['Yield', 'Impurity', 'ImpurityXRatio'];
+    const corrs = findCorrelations(newData, targetNames);
+    setCorrelations(corrs);
+    
+    // Find best values
+    const yieldMax = Math.max(...newData.map(d => d.Yield));
+    const yieldMaxIter = newData.findIndex(d => d.Yield === yieldMax) + 1;
+    
+    const impurityMin = Math.min(...newData.map(d => d.Impurity));
+    const impurityMinIter = newData.findIndex(d => d.Impurity === impurityMin) + 1;
+    
+    const ratioMax = Math.max(...newData.map(d => d.ImpurityXRatio));
+    const ratioMaxIter = newData.findIndex(d => d.ImpurityXRatio === ratioMax) + 1;
+    
+    setBestValues({
+      Yield: { value: yieldMax, iteration: yieldMaxIter },
+      Impurity: { value: impurityMin, iteration: impurityMinIter },
+      ImpurityXRatio: { value: ratioMax, iteration: ratioMaxIter }
+    });
   };
 
   return (
@@ -494,71 +452,32 @@ const BayBEDashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {data.length === 0 && (
-              <div className="my-4 p-4 bg-amber-50 border border-amber-200 rounded-md">
-                <h3 className="text-amber-800 font-medium mb-2">No optimization data found</h3>
-                <p className="text-amber-700 mb-2">
-                  The dashboard couldn't find or load the "optimization.csv" file. You have two options:
-                </p>
-                <ol className="list-decimal list-inside text-amber-700 space-y-1 mb-3">
-                  <li>Place your "optimization.csv" file in the same directory as this HTML file</li>
-                  <li>Upload your optimization CSV file using the button below</li>
-                </ol>
-                <div className="flex items-center space-x-2">
-                  <label 
-                    htmlFor="csv-upload" 
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md cursor-pointer hover:bg-blue-700"
-                  >
-                    Upload CSV File
-                  </label>
-                  <input 
-                    id="csv-upload" 
-                    type="file" 
-                    accept=".csv" 
-                    className="hidden" 
-                    onChange={handleFileUpload} 
-                  />
-                  <span className="text-sm text-amber-600">
-                    (Expecting columns: T1Celsius, t1min, T2Celsius, t2min, 
-                    EquivalentsReagent1, EquivalentsBASE1, ConcentrationMolar, Yield, Impurity, ImpurityXRatio)
-                  </span>
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center space-x-4">
+                <div>
+                  <span className="font-medium">Current iteration: </span>
+                  <span className="text-blue-600">{currentIteration} / {data.length}</span>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRegenerateData}
+                  className="text-xs"
+                >
+                  Regenerate Data
+                </Button>
               </div>
-            )}
-            
-            {data.length > 0 && (
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center space-x-4">
-                  <div>
-                    <span className="font-medium">Current iteration: </span>
-                    <span className="text-blue-600">{currentIteration} / {data.length}</span>
-                  </div>
-                  <label 
-                    htmlFor="csv-upload-small" 
-                    className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 cursor-pointer"
-                  >
-                    Change Data
-                  </label>
-                  <input 
-                    id="csv-upload-small" 
-                    type="file" 
-                    accept=".csv" 
-                    className="hidden" 
-                    onChange={handleFileUpload} 
-                  />
-                </div>
-                <div className="w-1/2">
-                  <Slider 
-                    value={[currentIteration]} 
-                    min={1} 
-                    max={data.length || 1} 
-                    step={1}
-                    onValueChange={(value) => setCurrentIteration(value[0])}
-                    className="py-4"
-                  />
-                </div>
+              <div className="w-1/2">
+                <Slider 
+                  value={[currentIteration]} 
+                  min={1} 
+                  max={data.length || 1} 
+                  step={1}
+                  onValueChange={(value) => setCurrentIteration(value[0])}
+                  className="py-4"
+                />
               </div>
-            )}
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               {['Yield', 'Impurity', 'ImpurityXRatio'].map(metric => (
@@ -985,15 +904,6 @@ const BayBEDashboard = () => {
                   </div>
                 </div>
                 
-                <div className="text-center py-12 text-gray-500">
-                  <p>The GP surrogate model visualization would be rendered here.</p>
-                  <p className="mt-2 text-sm">
-                    This would typically show the mean prediction and uncertainty bounds from the GP model
-                    for the selected parameter and target, similar to the gp_surrogate_visualization component
-                    in the BayBE library.
-                  </p>
-                </div>
-
                 <div className="h-96">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={(() => {
@@ -1119,7 +1029,7 @@ const BayBEDashboard = () => {
             </Card>
           </TabsContent>
           
-          {/* New Operational Window Tab */}
+          {/* Operational Window Tab */}
           <TabsContent value="operational" className="space-y-4">
             <Card>
               <CardHeader>
