@@ -86,30 +86,14 @@ const fetchOptimizationData = async () => {
     // Try to read from window.fs if available
     if (window.fs && window.fs.readFile) {
       try {
+        console.log("Attempting to read file with window.fs...");
         const response = await window.fs.readFile('optimization.csv', { encoding: 'utf8' });
-        const lines = response.trim().split('\n');
-        const headers = lines[0].split(',');
-        
-        const parsedData = lines.slice(1).map((line, index) => {
-          const values = line.split(',');
-          const entry = { iteration: index + 1 };
-          
-          headers.forEach((header, i) => {
-            entry[header] = parseFloat(values[i]);
-          });
-          
-          return entry;
-        });
-        
-        console.log('Successfully loaded optimization.csv data:', parsedData.length, 'rows');
-        return parsedData;
+        // Rest of your parsing code...
       } catch (fsError) {
-        console.error('Error reading file with window.fs:', fsError);
-        // Try browser fetch as fallback
+        console.warn('Error reading file with window.fs:', fsError);
         throw new Error('File not found with window.fs');
       }
     }
-    
     // Browser fetch approach
     const response = await fetch('optimization.csv');
     if (!response.ok) {

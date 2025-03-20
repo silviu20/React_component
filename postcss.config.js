@@ -1,7 +1,7 @@
-// Update to use ES Module syntax
+// Update to use ES Module syntax and @tailwindcss/postcss
 export default {
   plugins: {
-    tailwindcss: {},
+    '@tailwindcss/postcss': {},
     autoprefixer: {},
   },
 }
