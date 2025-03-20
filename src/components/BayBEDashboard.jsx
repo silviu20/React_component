@@ -83,45 +83,69 @@ const createSampleData = (iterations = 35) => {
 // Get a sample of data from optimization.csv
 const fetchOptimizationData = async () => {
   try {
-    // Try to read from window.fs if available
-    if (window.fs && window.fs.readFile) {
+    let data;
+    
+    // First attempt: Try using window.fs if available
+    if (window.fs && typeof window.fs.readFile === 'function') {
       try {
         console.log("Attempting to read file with window.fs...");
         const response = await window.fs.readFile('optimization.csv', { encoding: 'utf8' });
-        // Rest of your parsing code...
+        console.log("Successfully read file:", response.slice(0, 100) + "...");
+        
+        // Parse the CSV data
+        data = parseCSVData(response);
+        console.log('Successfully parsed CSV data from window.fs:', data.length, 'rows');
+        return data;
       } catch (fsError) {
         console.warn('Error reading file with window.fs:', fsError);
-        throw new Error('File not found with window.fs');
+        // Continue to next method if this fails
       }
     }
-    // Browser fetch approach
-    const response = await fetch('optimization.csv');
-    if (!response.ok) {
-      throw new Error(`Failed to fetch optimization.csv: ${response.status} ${response.statusText}`);
+    
+    // Second attempt: Try using fetch API
+    try {
+      console.log("Attempting to fetch optimization.csv via fetch API...");
+      const response = await fetch('/optimization.csv');
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const text = await response.text();
+      data = parseCSVData(text);
+      console.log('Successfully loaded optimization.csv via fetch:', data.length, 'rows');
+      return data;
+    } catch (fetchError) {
+      console.warn('Error fetching CSV file:', fetchError);
     }
-    const text = await response.text();
-    const lines = text.trim().split('\n');
-    const headers = lines[0].split(',');
     
-    const parsedData = lines.slice(1).map((line, index) => {
-      const values = line.split(',');
-      const entry = { iteration: index + 1 };
-      
-      headers.forEach((header, i) => {
-        entry[header] = parseFloat(values[i]);
-      });
-      
-      return entry;
-    });
-    
-    console.log('Successfully loaded optimization.csv via fetch:', parsedData.length, 'rows');
-    return parsedData;
-    
+    // Fallback: Return sample data if both methods fail
+    console.warn('Using sample data as fallback');
+    return createSampleData();
   } catch (error) {
-    console.warn('Using sample data instead:', error.message);
+    console.error('Critical error in fetchOptimizationData:', error);
+    // Make sure we always return something to prevent rendering errors
     return createSampleData();
   }
 };
+
+// Separate parsing logic to improve maintainability
+const parseCSVData = (csvText) => {
+  const lines = csvText.trim().split('\n');
+  const headers = lines[0].split(',');
+  
+  return lines.slice(1).map((line, index) => {
+    const values = line.split(',');
+    const entry = { iteration: index + 1 };
+    
+    headers.forEach((header, i) => {
+      if (i < values.length) {
+        entry[header] = parseFloat(values[i]);
+      }
+    });
+    
+    return entry;
+  });
+};
+
 
 const findCorrelations = (data, targets) => {
   const params = ["T1Celsius", "t1min", "T2Celsius", "t2min", 
